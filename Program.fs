@@ -19,8 +19,11 @@ type Tile = ToggleButton * TileState * TileType
 let numRows, numColumns = 16, 16 
 let numBombs = 32
 let tiles = Array.init numRows (fun i -> Array.zeroCreate<Tile> numColumns)
+let coords = [|for i = 0 to numRows - 1 do
+                   for j = 0 to numColumns - 1 do
+                       yield (i,j)|]
 
-let neighbours row column =
+let neighbours (row, column) =
     [for i = -1 to 1 do
         for j = -1 to 1 do
             let r, c = row + i, column + j
@@ -29,7 +32,7 @@ let neighbours row column =
                0 <= c && c < numColumns then 
                 yield r, c]
 
-let revealTile row column disable =
+let revealTile disable (row, column)  =
     let button, tileState, bombState = tiles.[row].[column]
     match bombState with
     | Bomb -> button.Content <- "B"
@@ -39,32 +42,24 @@ let revealTile row column disable =
         button.IsEnabled <- false
     tiles.[row].[column] <- button, Revealed, bombState
 
-let revealAll() =
-    for i = 0 to numRows - 1 do
-        for j = 0 to numColumns - 1 do
-            revealTile i j true
+let revealAll() = coords |> Array.iter (revealTile true)
 
-let rec expandTile row column =
+let rec expandTile (row, column) =
     match tiles.[row].[column] with
     | _, Unknown, NoBomb(x) ->
-        revealTile row column false
+        revealTile false (row, column)
         if x = 0 then
-            for r, c in neighbours row column do
-                expandTile r c
+            neighbours (row, column) |> List.iter expandTile
     | _ -> ()
 
+let countNeighboursBy func =
+    neighbours >> List.sumBy (fun (r,c) -> func (tiles.[r].[c]))
     
-let numNeighbourBombs row column = 
-    neighbours row column 
-    |> List.sumBy(fun (r, c) -> match tiles.[r].[c] with
-                                | _,_,Bomb -> 1 
-                                | _ -> 0)
+let numNeighbourBombs = 
+    countNeighboursBy (fun (_,_,b) -> match b with | Bomb -> 1 | _ -> 0)
 
-let numNeighbourFlags row column = 
-    neighbours row column 
-    |> List.sumBy(fun (r, c) -> match tiles.[r].[c] with
-                                | _,Flagged,_ -> 1 
-                                | _ -> 0)
+let numNeighbourFlags = 
+    countNeighboursBy (fun (_,s,_) -> match s with | Flagged -> 1 | _ -> 0)
 
 let checkVictory currentTileHasBomb =
     if currentTileHasBomb then
@@ -79,13 +74,13 @@ let checkVictory currentTileHasBomb =
         false
         
 
-let onLeftClick row column =
+let onLeftClick (row, column) =
     let button, tileState, bombState = tiles.[row].[column]    
     if tileState = Unknown then
-        expandTile row column
+        expandTile (row, column)
         checkVictory (bombState = Bomb) |> ignore
 
-let onRightClick row column =
+let onRightClick (row, column) =
     let button, tileState, b = tiles.[row].[column]
     match tileState with
     | Unknown -> 
@@ -97,17 +92,17 @@ let onRightClick row column =
     | _ -> ()
     
 
-let onDoubleButtonClick row column =
+let onDoubleButtonClick (row, column) =
     let rec expandTilesManual (row,column) firstLevel =
         let _,state,bomb = tiles.[row].[column]
         if not (firstLevel && state <> Revealed) then
             match bomb with
             | NoBomb(x) ->
-                if firstLevel && x <= (numNeighbourFlags row column) || x = 0 then
-                    for (r,c) in (neighbours row column) do
+                if firstLevel && x <= (numNeighbourFlags (row, column)) || x = 0 then
+                    for (r,c) in (neighbours (row ,column)) do
                         let _,state,bomb = tiles.[r].[c]                    
                         if state = Unknown then
-                            revealTile r c false
+                            revealTile false (r, c)
                             if not (checkVictory (bomb = Bomb)) then
                                 expandTilesManual (r,c) false
             | _ -> Debug.Fail("Cannot expand a tile where there is a bomb")
@@ -116,17 +111,17 @@ let onDoubleButtonClick row column =
 
 let mutable doubleButtonPress = false
 
-let onMouseUp row column (e:MouseButtonEventArgs ) =
+let onMouseUp coords (e:MouseButtonEventArgs ) =
     doubleButtonPress <- 
         match e.ChangedButton with
         | MouseButton.Left ->
             if Mouse.RightButton = MouseButtonState.Pressed then true
-            elif doubleButtonPress then onDoubleButtonClick row column; false
-            else onLeftClick row column; false
+            elif doubleButtonPress then onDoubleButtonClick coords; false
+            else onLeftClick coords; false
         | MouseButton.Right ->
             if Mouse.LeftButton = MouseButtonState.Pressed then true
-            elif doubleButtonPress then onDoubleButtonClick row column; false
-            else onRightClick row column; false
+            elif doubleButtonPress then onDoubleButtonClick coords; false
+            else onRightClick coords; false
         | _ -> doubleButtonPress
 
 let ResetField() =
@@ -138,20 +133,18 @@ let ResetField() =
             bombs.Add(location)
 
     // First pass: add the bombs to the field
-    for i = 0 to numRows - 1 do
-        for j = 0 to numColumns - 1 do
-            let button, state, _ = tiles.[i].[j]
-            button.IsChecked <- Nullable(false)
-            button.IsEnabled <- true
-            button.Content <- ""
-            tiles.[i].[j] <- button, Unknown, if bombs.Contains(i * numColumns + j) then Bomb else NoBomb(0)
+    for (i, j) in coords do
+        let button, state, _ = tiles.[i].[j]
+        button.IsChecked <- Nullable(false)
+        button.IsEnabled <- true
+        button.Content <- ""
+        tiles.[i].[j] <- button, Unknown, if bombs.Contains(i * numColumns + j) then Bomb else NoBomb(0)
 
     // In a second pass, compute neighbours for each tile
-    for i = 0 to numRows - 1 do
-        for j = 0 to numColumns - 1 do
-            match tiles.[i].[j] with
-            | button, state, NoBomb(_) -> tiles.[i].[j] <- button, state, NoBomb(numNeighbourBombs i j)
-            | _ -> ()
+    for (i, j) in coords do
+        match tiles.[i].[j] with
+        | button, state, NoBomb(_) -> tiles.[i].[j] <- button, state, NoBomb(numNeighbourBombs (i, j))
+        | _ -> ()
     
 [<EntryPoint;STAThread>]
 let main argv = 
@@ -171,14 +164,13 @@ let main argv =
     [1 .. numColumns] |> List.iter(fun i -> addDefaultColumn gameGrid)
     [1 .. numRows] |> List.iter(fun i -> addDefaultRow gameGrid)
 
-    for i = 0 to numRows - 1 do
-        for j = 0 to numColumns - 1 do
-            let button = ToggleButton(Width = 32.0, Height = 32.0)
-            button.MouseUp.Add(onMouseUp i j)
-            button.PreviewMouseLeftButtonDown.Add(fun e -> e.Handled <- true)
-            button.PreviewMouseLeftButtonUp.Add(fun e -> onMouseUp i j e; e.Handled <- true)
-            tiles.[i].[j] <- button, Unknown, NoBomb(0)
-            addToGrid gameGrid button i j
+    for (i, j) in coords do
+        let button = ToggleButton(Width = 32.0, Height = 32.0)
+        button.MouseUp.Add(onMouseUp (i, j))
+        button.PreviewMouseLeftButtonDown.Add(fun e -> e.Handled <- true)
+        button.PreviewMouseLeftButtonUp.Add(fun e -> onMouseUp (i, j) e; e.Handled <- true)
+        tiles.[i].[j] <- button, Unknown, NoBomb(0)
+        addToGrid gameGrid button i j
             
     ResetField()            
 
