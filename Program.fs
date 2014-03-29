@@ -23,15 +23,6 @@ let coords = [|for i = 0 to numRows - 1 do
                    for j = 0 to numColumns - 1 do
                        yield (i,j)|]
 
-let neighbours (row, column) =
-    [for i = -1 to 1 do
-        for j = -1 to 1 do
-            let r, c = row + i, column + j
-            if not(r = row && c = column) && 
-               0 <= r && r < numRows && 
-               0 <= c && c < numColumns then 
-                yield r, c]
-
 let revealTile disable (row, column)  =
     let button, tileState, bombState = tiles.[row].[column]
     match bombState with
@@ -43,6 +34,15 @@ let revealTile disable (row, column)  =
     tiles.[row].[column] <- button, Revealed, bombState
 
 let revealAll() = coords |> Array.iter (revealTile true)
+
+let neighbours (row, column) =
+    [for i = -1 to 1 do
+        for j = -1 to 1 do
+            let r, c = row + i, column + j
+            if not(r = row && c = column) && 
+               0 <= r && r < numRows && 
+               0 <= c && c < numColumns then 
+                yield r, c]
 
 let rec expandTile (row, column) =
     match tiles.[row].[column] with
@@ -56,10 +56,10 @@ let countNeighboursBy func =
     neighbours >> List.sumBy (fun (r,c) -> func (tiles.[r].[c]))
     
 let numNeighbourBombs = 
-    countNeighboursBy (fun (_,_,b) -> match b with | Bomb -> 1 | _ -> 0)
+    countNeighboursBy (function _,_,Bomb -> 1 | _ -> 0)
 
 let numNeighbourFlags = 
-    countNeighboursBy (fun (_,s,_) -> match s with | Flagged -> 1 | _ -> 0)
+    countNeighboursBy (function _,Flagged,_ -> 1 | _ -> 0)
 
 let checkVictory currentTileHasBomb =
     if currentTileHasBomb then
@@ -92,8 +92,8 @@ let onRightClick (row, column) =
     | _ -> ()
     
 
-let onDoubleButtonClick (row, column) =
-    let rec expandTilesManual (row,column) firstLevel =
+let onDualClick (row, column) =
+    let rec dualClickExpand (row,column) firstLevel =
         let _,state,bomb = tiles.[row].[column]
         if not (firstLevel && state <> Revealed) then
             match bomb with
@@ -104,27 +104,27 @@ let onDoubleButtonClick (row, column) =
                         if state = Unknown then
                             revealTile false (r, c)
                             if not (checkVictory (bomb = Bomb)) then
-                                expandTilesManual (r,c) false
+                                dualClickExpand (r,c) false
             | _ -> Debug.Fail("Cannot expand a tile where there is a bomb")
 
-    expandTilesManual (row, column) true
+    dualClickExpand (row, column) true
 
-let mutable doubleButtonPress = false
+let mutable dualClick = false
 
-let onMouseUp coords (e:MouseButtonEventArgs ) =
-    doubleButtonPress <- 
+let onMouseUp coords (e:MouseButtonEventArgs) =
+    dualClick <- 
         match e.ChangedButton with
         | MouseButton.Left ->
             if Mouse.RightButton = MouseButtonState.Pressed then true
-            elif doubleButtonPress then onDoubleButtonClick coords; false
+            elif dualClick then onDualClick coords; false
             else onLeftClick coords; false
         | MouseButton.Right ->
             if Mouse.LeftButton = MouseButtonState.Pressed then true
-            elif doubleButtonPress then onDoubleButtonClick coords; false
+            elif dualClick then onDualClick coords; false
             else onRightClick coords; false
-        | _ -> doubleButtonPress
+        | _ -> dualClick
 
-let ResetField() =
+let resetField() =
     let bombs = ResizeArray<int>()
     let rand = Random()
     while bombs.Count < numBombs do
@@ -161,8 +161,8 @@ let main argv =
         grid.RowDefinitions.Add(RowDefinition(Height = GridLength(0.0, GridUnitType.Auto)))
 
     let gameGrid = Grid()
-    [1 .. numColumns] |> List.iter(fun i -> addDefaultColumn gameGrid)
-    [1 .. numRows] |> List.iter(fun i -> addDefaultRow gameGrid)
+    [1 .. numColumns] |> List.iter(fun _ -> addDefaultColumn gameGrid)
+    [1 .. numRows] |> List.iter(fun _ -> addDefaultRow gameGrid)
 
     for (i, j) in coords do
         let button = ToggleButton(Width = 32.0, Height = 32.0)
@@ -172,12 +172,12 @@ let main argv =
         tiles.[i].[j] <- button, Unknown, NoBomb(0)
         addToGrid gameGrid button i j
             
-    ResetField()            
+    resetField()            
 
     let controlGrid = Grid()
     addDefaultRow controlGrid
     let newGameButton = Button(Width = 64.0, Height = 64.0, Content="Reset")
-    newGameButton.Click.Add(fun _ -> ResetField())
+    newGameButton.Click.Add(fun _ -> resetField())
     addToGrid controlGrid newGameButton 0 0
 
     let mainGrid = Grid()
