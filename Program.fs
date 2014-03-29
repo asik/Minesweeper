@@ -156,11 +156,20 @@ let ResetField() =
 [<EntryPoint;STAThread>]
 let main argv = 
 
+    let addToGrid (grid:Grid) (uie:UIElement) row column =
+        grid.Children.Add(uie) |> ignore
+        Grid.SetColumn(uie, column)
+        Grid.SetRow(uie, row)
+
+    let addDefaultColumn (grid:Grid) =
+        grid.ColumnDefinitions.Add(ColumnDefinition(Width = GridLength(0.0, GridUnitType.Auto)))
+
+    let addDefaultRow (grid:Grid) =
+        grid.RowDefinitions.Add(RowDefinition(Height = GridLength(0.0, GridUnitType.Auto)))
+
     let gameGrid = Grid()
-    for i = 1 to numColumns do
-        gameGrid.ColumnDefinitions.Add(ColumnDefinition(Width = GridLength(0.0, GridUnitType.Auto)))
-    for i = 1 to numRows do
-        gameGrid.RowDefinitions.Add(RowDefinition(Height = GridLength(0.0, GridUnitType.Auto)))
+    [1 .. numColumns] |> List.iter(fun i -> addDefaultColumn gameGrid)
+    [1 .. numRows] |> List.iter(fun i -> addDefaultRow gameGrid)
 
     for i = 0 to numRows - 1 do
         for j = 0 to numColumns - 1 do
@@ -169,26 +178,21 @@ let main argv =
             button.PreviewMouseLeftButtonDown.Add(fun e -> e.Handled <- true)
             button.PreviewMouseLeftButtonUp.Add(fun e -> onMouseUp i j e; e.Handled <- true)
             tiles.[i].[j] <- button, Unknown, NoBomb(0)
-            gameGrid.Children.Add(button) |> ignore
-            Grid.SetColumn(button, j)
-            Grid.SetRow(button, i)
+            addToGrid gameGrid button i j
             
     ResetField()            
 
     let controlGrid = Grid()
-    controlGrid.RowDefinitions.Add(RowDefinition(Height = GridLength(0.0, GridUnitType.Auto)))
+    addDefaultRow controlGrid
     let newGameButton = Button(Width = 64.0, Height = 64.0, Content="Reset")
     newGameButton.Click.Add(fun _ -> ResetField())
-    controlGrid.Children.Add(newGameButton) |> ignore
-    Grid.SetRow(newGameButton, 0)
+    addToGrid controlGrid newGameButton 0 0
 
     let mainGrid = Grid()
-    mainGrid.RowDefinitions.Add(RowDefinition(Height = GridLength(0.0, GridUnitType.Auto)))
-    mainGrid.RowDefinitions.Add(RowDefinition(Height = GridLength(0.0, GridUnitType.Auto)))
-    mainGrid.Children.Add(controlGrid) |> ignore
-    mainGrid.Children.Add(gameGrid) |> ignore
-    Grid.SetRow(controlGrid, 0)
-    Grid.SetRow(gameGrid, 1)
+    addDefaultRow mainGrid
+    addDefaultRow mainGrid
+    addToGrid mainGrid controlGrid 0 0
+    addToGrid mainGrid gameGrid 1 0
     
     let window = Window(Title = "MineSweeper",
                         Content = mainGrid,

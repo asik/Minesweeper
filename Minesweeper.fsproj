@@ -7,8 +7,8 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>966dc8f4-e615-4143-a3c4-ff4acd1a117d</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>Minesweeper_Git</RootNamespace>
-    <AssemblyName>Minesweeper_Git</AssemblyName>
+    <RootNamespace>Minesweeper</RootNamespace>
+    <AssemblyName>Minesweeper</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <TargetFSharpCoreVersion>4.3.1.0</TargetFSharpCoreVersion>
@@ -23,7 +23,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <DocumentationFile>bin\Debug\Minesweeper_Git.XML</DocumentationFile>
+    <DocumentationFile>bin\Debug\Minesweeper.XML</DocumentationFile>
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
@@ -34,7 +34,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <DocumentationFile>bin\Release\Minesweeper_Git.XML</DocumentationFile>
+    <DocumentationFile>bin\Release\Minesweeper.XML</DocumentationFile>
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
