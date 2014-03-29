@@ -16,7 +16,7 @@ type TileType =
 
 type Tile = ToggleButton * TileState * TileType
     
-let numRows, numColumns = 16, 16
+let numRows, numColumns = 16, 16 
 let numBombs = 32
 let tiles = Array.init numRows (fun i -> Array.zeroCreate<Tile> numColumns)
 
