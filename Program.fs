@@ -3,6 +3,7 @@ open System.Windows
 open System.Windows.Controls
 open System.Windows.Controls.Primitives
 open System.Windows.Input
+open System.Windows.Media
 open System.Diagnostics
 
 type TileState =
@@ -16,24 +17,37 @@ type TileType =
 
 type Tile = ToggleButton * TileState * TileType
     
-let numRows, numColumns = 16, 16 
-let numBombs = 32
+let numRows, numColumns = 16, 32 
+let numBombs = 80
 let tiles = Array.init numRows (fun i -> Array.zeroCreate<Tile> numColumns)
 let coords = [|for i = 0 to numRows - 1 do
                    for j = 0 to numColumns - 1 do
                        yield (i,j)|]
 
+let color = function
+| 0 -> Colors.White
+| 1 -> Colors.Blue
+| 2 -> Colors.Green
+| 3 -> Colors.Red
+| 4 -> Colors.DarkBlue
+| 5 -> Colors.Maroon
+| 6 -> Colors.Turquoise
+| 7 -> Colors.Black
+| 8 -> Colors.DarkGray
+| _ -> failwith "invalid number"
+
 let revealTile disable (row, column)  =
     let button, tileState, bombState = tiles.[row].[column]
     match bombState with
     | Bomb -> button.Content <- "B"
-    | NoBomb(x) -> button.Content <- if x = 0 then "" else string x
+    | NoBomb(x) -> 
+        button.Content <- if x = 0 then "" else string x
+        button.Foreground <- SolidColorBrush(color x)
     button.IsChecked <- Nullable(true)
-    if disable then
-        button.IsEnabled <- false
+    button.IsEnabled <- not disable
     tiles.[row].[column] <- button, Revealed, bombState
 
-let revealAll() = coords |> Array.iter (revealTile true)
+let revealAll() = Array.iter (revealTile true) coords
 
 let neighbours (row, column) =
     [for i = -1 to 1 do
@@ -53,13 +67,13 @@ let rec expandTile (row, column) =
     | _ -> ()
 
 let countNeighboursBy func =
-    neighbours >> List.sumBy (fun (r,c) -> func (tiles.[r].[c]))
+    neighbours >> List.filter (fun (r,c) -> func (tiles.[r].[c])) >> List.length
     
 let numNeighbourBombs = 
-    countNeighboursBy (function _,_,Bomb -> 1 | _ -> 0)
+    countNeighboursBy (fun (_,_,b) -> b = Bomb)
 
 let numNeighbourFlags = 
-    countNeighboursBy (function _,Flagged,_ -> 1 | _ -> 0)
+    countNeighboursBy (fun (_,s,_) -> s = Flagged)
 
 let checkVictory currentTileHasBomb =
     if currentTileHasBomb then
@@ -85,6 +99,7 @@ let onRightClick (row, column) =
     match tileState with
     | Unknown -> 
         button.Content <- "¶"
+        button.Foreground <- SolidColorBrush(Colors.DarkRed)
         tiles.[row].[column] <- button, Flagged, b
     | Flagged -> 
         button.Content <- ""
@@ -93,21 +108,20 @@ let onRightClick (row, column) =
     
 
 let onDualClick (row, column) =
-    let rec dualClickExpand (row,column) firstLevel =
-        let _,state,bomb = tiles.[row].[column]
-        if not (firstLevel && state <> Revealed) then
-            match bomb with
-            | NoBomb(x) ->
-                if firstLevel && x <= (numNeighbourFlags (row, column)) || x = 0 then
-                    for (r,c) in (neighbours (row ,column)) do
-                        let _,state,bomb = tiles.[r].[c]                    
-                        if state = Unknown then
-                            revealTile false (r, c)
-                            if not (checkVictory (bomb = Bomb)) then
-                                dualClickExpand (r,c) false
-            | _ -> Debug.Fail("Cannot expand a tile where there is a bomb")
-
-    dualClickExpand (row, column) true
+    let _,state,bomb = tiles.[row].[column]
+    match state, bomb with
+    | Revealed, NoBomb(x) ->
+        if x <= (numNeighbourFlags (row, column)) then
+            for (r,c) in (neighbours (row ,column)) do
+                let _,state,bomb = tiles.[r].[c]
+                match state, bomb with
+                | Unknown, Bomb -> checkVictory true |> ignore
+                | Unknown, NoBomb(x) -> 
+                    revealTile false (r,c)                
+                    if not (checkVictory false) && x = 0 then
+                        neighbours (r,c) |> List.iter expandTile
+                | _ -> ()
+    | _ -> ()
 
 let mutable dualClick = false
 
@@ -166,6 +180,7 @@ let main argv =
 
     for (i, j) in coords do
         let button = ToggleButton(Width = 32.0, Height = 32.0)
+        button.FontWeight <- FontWeights.ExtraBold
         button.MouseUp.Add(onMouseUp (i, j))
         button.PreviewMouseLeftButtonDown.Add(fun e -> e.Handled <- true)
         button.PreviewMouseLeftButtonUp.Add(fun e -> onMouseUp (i, j) e; e.Handled <- true)
