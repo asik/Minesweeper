@@ -90,14 +90,16 @@ let checkVictory currentTileHasBomb =
   
 
 let resetField (i, j) =
-    let noBombZone = (i,j)::(neighbours (i,j))
+    // Where the user clicks and its neighbours cannot contain bombs
+    let noBombZone = (i,j)::(neighbours (i,j)) |> List.map (fun (ci, cj) -> ci *numColumns + cj)
+    let bombCandidates = ResizeArray<int>()
     let bombs = ResizeArray<int>()
+    bombCandidates.AddRange((Set.ofList [0..numRows * numColumns - 1]) - (Set.ofList noBombZone))
     let rand = Random()
     while bombs.Count < numBombs do
-        let location = rand.Next(numRows * numColumns - 1)
-        if not (bombs.Contains(location)) && 
-           not (List.exists (fun (ci, cj) -> ci *numColumns + cj = location) noBombZone) then
-            bombs.Add(location)   
+        let index = rand.Next(bombCandidates.Count)
+        bombs.Add(bombCandidates.[index])        
+        bombCandidates.RemoveAt(index)  
 
     // First pass: add the bombs to the field
     for (i, j) in coords do
