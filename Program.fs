@@ -16,9 +16,10 @@ type TileType =
 | NoBomb of int
 
 type Tile = ToggleButton * TileState * TileType
-    
+   
+let mutable resetFieldOnNextClick = true
 let numRows, numColumns = 16, 32 
-let numBombs = 80
+let numBombs = 100
 let tiles = Array.init numRows (fun i -> Array.zeroCreate<Tile> numColumns)
 let coords = [|for i = 0 to numRows - 1 do
                    for j = 0 to numColumns - 1 do
@@ -66,8 +67,8 @@ let rec expandTile (row, column) =
             neighbours (row, column) |> List.iter expandTile
     | _ -> ()
 
-let countNeighboursBy func =
-    neighbours >> List.filter (fun (r,c) -> func (tiles.[r].[c])) >> List.length
+let countNeighboursBy predicate =
+    neighbours >> List.filter (fun (r,c) -> predicate (tiles.[r].[c])) >> List.length
     
 let numNeighbourBombs = 
     countNeighboursBy (fun (_,_,b) -> b = Bomb)
@@ -86,9 +87,36 @@ let checkVictory currentTileHasBomb =
         true
     else 
         false
-        
+  
+
+let resetField (i, j) =
+    let noBombZone = (i,j)::(neighbours (i,j))
+    let bombs = ResizeArray<int>()
+    let rand = Random()
+    while bombs.Count < numBombs do
+        let location = rand.Next(numRows * numColumns - 1)
+        if not (bombs.Contains(location)) && 
+           not (List.exists (fun (ci, cj) -> ci *numColumns + cj = location) noBombZone) then
+            bombs.Add(location)   
+
+    // First pass: add the bombs to the field
+    for (i, j) in coords do
+        let button, state, _ = tiles.[i].[j]
+        button.IsChecked <- Nullable(false)
+        button.IsEnabled <- true
+        button.Content <- ""
+        tiles.[i].[j] <- button, Unknown, if bombs.Contains(i * numColumns + j) then Bomb else NoBomb(0)
+
+    // In a second pass, compute neighbours for each tile
+    for (i, j) in coords do
+        match tiles.[i].[j] with
+        | button, state, NoBomb(_) -> tiles.[i].[j] <- button, state, NoBomb(numNeighbourBombs (i, j))
+        | _ -> ()   
 
 let onLeftClick (row, column) =
+    if resetFieldOnNextClick then
+        resetField(row, column)
+        resetFieldOnNextClick <- false
     let button, tileState, bombState = tiles.[row].[column]    
     if tileState = Unknown then
         expandTile (row, column)
@@ -125,40 +153,18 @@ let onDualClick (row, column) =
 
 let mutable dualClick = false
 
-let onMouseUp coords (e:MouseButtonEventArgs) =
+let onMouseUp clickLocation (e:MouseButtonEventArgs) =
     dualClick <- 
         match e.ChangedButton with
         | MouseButton.Left ->
             if Mouse.RightButton = MouseButtonState.Pressed then true
-            elif dualClick then onDualClick coords; false
-            else onLeftClick coords; false
+            elif dualClick then onDualClick clickLocation; false
+            else onLeftClick clickLocation; false
         | MouseButton.Right ->
             if Mouse.LeftButton = MouseButtonState.Pressed then true
-            elif dualClick then onDualClick coords; false
-            else onRightClick coords; false
+            elif dualClick then onDualClick clickLocation; false
+            else onRightClick clickLocation; false
         | _ -> dualClick
-
-let resetField() =
-    let bombs = ResizeArray<int>()
-    let rand = Random()
-    while bombs.Count < numBombs do
-        let location = rand.Next(numRows * numColumns - 1)
-        if not (bombs.Contains(location)) then
-            bombs.Add(location)
-
-    // First pass: add the bombs to the field
-    for (i, j) in coords do
-        let button, state, _ = tiles.[i].[j]
-        button.IsChecked <- Nullable(false)
-        button.IsEnabled <- true
-        button.Content <- ""
-        tiles.[i].[j] <- button, Unknown, if bombs.Contains(i * numColumns + j) then Bomb else NoBomb(0)
-
-    // In a second pass, compute neighbours for each tile
-    for (i, j) in coords do
-        match tiles.[i].[j] with
-        | button, state, NoBomb(_) -> tiles.[i].[j] <- button, state, NoBomb(numNeighbourBombs (i, j))
-        | _ -> ()
     
 [<EntryPoint;STAThread>]
 let main argv = 
@@ -185,14 +191,12 @@ let main argv =
         button.PreviewMouseLeftButtonDown.Add(fun e -> e.Handled <- true)
         button.PreviewMouseLeftButtonUp.Add(fun e -> onMouseUp (i, j) e; e.Handled <- true)
         tiles.[i].[j] <- button, Unknown, NoBomb(0)
-        addToGrid gameGrid button i j
-            
-    resetField()            
+        addToGrid gameGrid button i j        
 
     let controlGrid = Grid()
     addDefaultRow controlGrid
     let newGameButton = Button(Width = 64.0, Height = 64.0, Content="Reset")
-    newGameButton.Click.Add(fun _ -> resetField())
+    newGameButton.Click.Add(fun _ -> resetField(0,0); resetFieldOnNextClick <- true)
     addToGrid controlGrid newGameButton 0 0
 
     let mainGrid = Grid()
